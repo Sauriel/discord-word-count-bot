@@ -8,6 +8,11 @@ export async function count(interaction, DB) {
   const user = interaction.user;
 
   const date = new Date().toISOString().slice(0, 10);
+  const germanDateFormat = new Intl.DateTimeFormat('de-DE', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(date));
 
   // Update the database with the new word count
   let count = await DB.get('SELECT count FROM word_counts WHERE user_id = ? AND date = ?', [user.id, date]);
@@ -24,9 +29,9 @@ export async function count(interaction, DB) {
   let message = '';
 
   if (userGoal && Number.parseInt(userGoal.goal, 10) <= count) {
-    message = `🎉 ${user.displayName} hat am ${date} das Tagesziel von ${userGoal.goal} Wörtern erreicht! Insgesamt wurden ${count} Wörter geschrieben.`;
+    message = `🎉 ${user.displayName} hat am ${germanDateFormat} das Tagesziel von ${userGoal.goal} Wörtern erreicht! Insgesamt wurden ${count} Wörter geschrieben.`;
   } else {
-    message = `${user.displayName} hat am ${date} insgesamt ${count} Wörter geschrieben.`;
+    message = `${user.displayName} hat am ${germanDateFormat} insgesamt ${count} Wörter geschrieben.`;
   }
 
   // Echo the number back
@@ -67,11 +72,16 @@ export async function getStats(interaction, DB) {
   const type = interaction.options.getString('type');
 
   const date = new Date().toISOString().slice(0, 10);
+  const germanDateFormat = new Intl.DateTimeFormat('de-DE', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(date));
   if (type === 'summary') {
     const stats = await DB.all('SELECT user_id, user_name, count FROM word_counts WHERE date = ?', [date]);
     const goals = await DB.all('SELECT user_id, goal FROM user_goals');
 
-    let message = `**Detaillierte Statistik für ${date}:**\n`
+    let message = `**Detaillierte Statistik für ${germanDateFormat}:**\n`
                 + '--------------------------------------------------------\n';
 
     stats.forEach((stat) => {
@@ -91,7 +101,7 @@ export async function getStats(interaction, DB) {
     const userGoal = await DB.get('SELECT goal FROM user_goals WHERE user_id = ?', [user.id]);
 
     let message = `Heute wurden insgesamt ${totalWords.total} Wörter geschrieben.\n`
-                + `**Detaillierte Statistik für ${date}:**\n`
+                + `**Detaillierte Statistik für ${germanDateFormat}:**\n`
                 + '--------------------------------------------------------\n'
                 + `**${user.displayName}** hat **${count}** Wörter geschrieben. *(Ziel: ${userGoal ? userGoal.goal : 0})*`;
 
@@ -114,7 +124,12 @@ export async function getStats(interaction, DB) {
  * @returns {Promise<string>}
  */
 export async function getDailyMessage(DB) {
-  const date = new Date().toISOString().slice(0, 10);
+  const date = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString().slice(0, 10); // 12 Hours ago
   const totalWords = await DB.get('SELECT SUM(count) as total FROM word_counts WHERE date = ?', [date]);
-  return `Heute wurden insgesamt ${totalWords.total} Wörter geschrieben.`;
+  const germanDateFormat = new Intl.DateTimeFormat('de-DE', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(date));
+  return `Gestern (${germanDateFormat}) wurden insgesamt ${totalWords.total} Wörter geschrieben.`;
 }

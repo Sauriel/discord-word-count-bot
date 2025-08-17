@@ -115,15 +115,15 @@ client.once('ready', async () => {
     }
   }
 
-  // Schedule daily message at 12:00 AM (midnight) (0 0 * * *)
-  cron.schedule('0 0 * * *', () => {
+  // Schedule daily message at 00:30
+  cron.schedule('30 0 * * *', () => {
     console.log('Sending daily message...');
     sendDailyMessage();
   }, {
     timezone: "Europe/Berlin" // Adjust timezone as needed
   });
 
-  console.log('Daily message scheduler activated for 12:00 AM');
+  console.log('Daily message scheduler activated for 00:30');
 });
 
 // Listen for slash command interactions
