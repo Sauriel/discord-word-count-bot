@@ -94,7 +94,7 @@ export async function getStats(interaction, DB) {
       ephemeral: true,
     });
   } else if (type === 'detailed') {
-  const user = interaction.user;
+    const user = interaction.user;
     const totalWords = await DB.get('SELECT SUM(count) as total FROM word_counts WHERE date = ?', [date]);
     let count = await DB.get('SELECT count FROM word_counts WHERE user_id = ? AND date = ?', [user.id, date]);
     count = Number.parseInt(count.count, 10);
@@ -132,4 +132,49 @@ export async function getDailyMessage(DB) {
     day: '2-digit',
   }).format(new Date(date));
   return `Gestern (${germanDateFormat}) wurden insgesamt ${totalWords.total} Wörter geschrieben.`;
+}
+
+const BRAG_SHAME_QUOTES = [
+  '"Der Unterschied zwischen Angeberei und Ehrgeiz ist sehr gering." - *Shawn Corey Carter*',
+  '"Prahlen sollst du erst auf dem Heimweg." - *Astrid Lindgren*',
+  '"Es ist kein Angeben, wenn du es beweisen kannst." - *Muhammad Ali*',
+  '"Angeben fühlt sich einfach gut an, man." - *The Weeknd*',
+  '"Who knows himself a braggart, let him fear this, for it will come to pass that every braggart shall be found an ass." - *William Shakespeare*',
+  '"Wenn du möchtest, dass die Leute gut von dir denken, dann sprich nicht gut von dir selbst." - *Blaise Pascal*',
+  '"It will always sound like bragging to those who are slacking." - *Darnell Lamont Walker*',
+];
+
+/**
+ * @param {import('discord.js').ChatInputCommandInteraction<import('discord.js').CacheType>} interaction
+ * @param {import('sqlite').Database} DB
+ */
+export async function brag(interaction, DB) {
+  const type = interaction.options.getString('type') ?? 'today'; // 'today' or  'total'
+
+  const user = interaction.user;
+  const date = new Date().toISOString().slice(0, 10);
+  const germanDateFormat = new Intl.DateTimeFormat('de-DE', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(date));
+
+  if (type === 'today') {
+    const userStats = await DB.get('SELECT count FROM word_counts WHERE user_id = ? AND date = ?', [user.id, date]);
+    await interaction.reply({
+      content: `Heute hat ${user.displayName} ${userStats.count} Wörter geschrieben.`,
+      ephemeral: false,
+    });
+  } else if (type === 'total') {
+    const totalWords = await DB.get('SELECT SUM(count) as total FROM word_counts WHERE user_id = ?', [user.id]);
+    await interaction.reply({
+      content: `Insgesamt hat ${user.displayName} ${totalWords.total} Wörter geschrieben.`,
+      ephemeral: false,
+    });
+  }
+
+  await interaction.reply({
+    content: BRAG_SHAME_QUOTES[Math.floor(Math.random() * BRAG_SHAME_QUOTES.length)],
+    ephemeral: true,
+  });
 }

@@ -7,7 +7,7 @@ import {
  } from 'discord.js';
 import dotenv from 'dotenv';
 import cron from 'node-cron';
-import { count, setGoal, getStats, getDailyMessage } from './commands/count.js';
+import { count, setGoal, getStats, getDailyMessage, brag } from './commands/count.js';
 import { getDB } from './commands/db.js';
 
 dotenv.config();
@@ -57,6 +57,19 @@ const commands = [
         )
         .setRequired(false),
     ),
+  new SlashCommandBuilder()
+    .setName('wb')
+    .setDescription('Gebe mit deinen geschriebenen Wörtern an.')
+    .addStringOption((option) =>
+      option
+        .setName('type')
+        .setDescription('Wie willst du angeben?')
+        .addChoices(
+          { name: 'Heute geschrieben', value: 'today' },
+          { name: 'Insgesamt geschrieben', value: 'total' },
+        )
+        .setRequired(false),
+    ),
 ];
 
 // Register slash commands
@@ -101,7 +114,8 @@ client.once('ready', async () => {
   const commandList = 'Der WordCountBot ist online. Folgende Befehle können verwendet werden:\n' +
                       '**/w [ZAHL]** - Anzahl der geschriebenen Wörter an diesem Tag (Wird addiert oder bei negativen Zahlen abgezogen)\n' +
                       '**/wgoal [ZAHL]** - Setze ein Tagesziel für die Anzahl der geschriebenen Wörter (Gilt für alle Tage)\n' +
-                      '**/wstat** - Zeige Statistiken über die geschriebenen Wörter an';
+                      '**/wstat** - Zeige Statistiken über die geschriebenen Wörter an\n' +
+                      '**/wb** - Gebe mit deinen geschriebenen Wörtern an';
 
   for (const channelId of ALLOWED_CHANNELS) {
     try {
@@ -138,6 +152,8 @@ client.on('interactionCreate', async (interaction) => {
     await setGoal(interaction, DB);
   } else if (commandName === 'wstat') {
     await getStats(interaction, DB);
+  } else if (commandName === 'wb') {
+    await brag(interaction, DB);
   }
 });
 
