@@ -156,24 +156,25 @@ export async function brag(interaction, DB) {
   const germanDateFormat = new Intl.DateTimeFormat('de-DE', {
     year: 'numeric',
     month: '2-digit',
-    day: '2-digit',
+      day: '2-digit',
   }).format(new Date(date));
+
+  let message = '';
 
   if (type === 'today') {
     const userStats = await DB.get('SELECT count FROM word_counts WHERE user_id = ? AND date = ?', [user.id, date]);
-    await interaction.reply({
-      content: `Heute hat ${user.displayName} ${userStats.count} Wörter geschrieben.`,
-      ephemeral: false,
-    });
+    message = `Am ${germanDateFormat} hat ${user.displayName} ${userStats.count} Wörter geschrieben.`
   } else if (type === 'total') {
     const totalWords = await DB.get('SELECT SUM(count) as total FROM word_counts WHERE user_id = ?', [user.id]);
-    await interaction.reply({
-      content: `Insgesamt hat ${user.displayName} ${totalWords.total} Wörter geschrieben.`,
-      ephemeral: false,
-    });
+    message = `Insgesamt hat ${user.displayName} ${totalWords.total} Wörter geschrieben.`;
   }
 
   await interaction.reply({
+    content: message,
+    ephemeral: false,
+  });
+
+  await interaction.followUp({
     content: BRAG_SHAME_QUOTES[Math.floor(Math.random() * BRAG_SHAME_QUOTES.length)],
     ephemeral: true,
   });
