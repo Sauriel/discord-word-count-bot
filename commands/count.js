@@ -1,3 +1,18 @@
+const COMPLIMENTS = [
+  "Fühlst du das kleine Lächeln auf deinen Lippen? Klopf dir selbst auf die Schulter! Das hast du großartig gemacht <3",
+  "Und eine glückliche Ruhe kehrt in dich ein. Das ist das Gefühl von \"Wow. Ich hab es geschafft!\"",
+  "Ich bin stolz auf dich. Und das darfst du auch sein!",
+  "Morgen wieder hier? Gleiche Uhrzeit? Gleiche Stelle? Ich weiß, du kannst das schaffen!",
+  "Toooor! Toooor! Und {USER} hat es geschafft! Die Menge jubelt!",
+  "Wow. Du warst aber schnell unterwegs! Was bist, ein Wort-Sprinter?",
+  "Wow. Du warst aber schnell unterwegs! Was bist, ein Marathonläufer?",
+  "Du bist krass. Einfach krass.",
+  "Wie du dein Leben auf die Reihe kriegst, so viel wie du schreibst... Beeindruckend!",
+  "Jeder Schritt zählt!",
+  "Jede Tagesetappe ist ein Stück näher am Ende der Geschichte!",
+  "Du machst das großartig!"
+];
+
 /**
  * @param {import('discord.js').ChatInputCommandInteraction<import('discord.js').CacheType>} interaction
  * @param {import('sqlite').Database} DB
@@ -27,6 +42,7 @@ export async function count(interaction, DB) {
   const userGoal = await DB.get('SELECT goal FROM user_goals WHERE user_id = ?', [user.id]);
 
   let message = '';
+  let goalMet = false;
 
   if (userGoal && Number.parseInt(userGoal.goal, 10) <= count) {
     message = `🎉 ${user.displayName} hat am ${germanDateFormat} das Tagesziel von ${userGoal.goal} Wörtern erreicht! Insgesamt wurden ${count} Wörter geschrieben.`;
@@ -39,6 +55,14 @@ export async function count(interaction, DB) {
     content: message,
     ephemeral: true, // Set to true if you want only the user to see the response
   });
+
+  if (goalMet) {
+    const motivationalQuote = COMPLIMENTS[Math.floor(Math.random() * COMPLIMENTS.length)].replace('{USER}', user.displayName);
+    await interaction.followUp({
+      content: motivationalQuote,
+      ephemeral: true,
+    });
+  }
 
   console.log(
     `User ${interaction.user.username} wrote ${newCount} words (${count} total, ${userGoal ? userGoal.goal : 0} goal)`,
