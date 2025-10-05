@@ -41,10 +41,11 @@ export async function count(interaction, DB) {
 
   const userGoal = await DB.get('SELECT goal FROM user_goals WHERE user_id = ?', [user.id]);
 
+  const userGoalCount = userGoal ? Number.parseInt(userGoal.goal, 10) : Number.MAX_VALUE;
   let message = '';
-  let goalMet = false;
+  let goalMetMod = count / userGoalCount;
 
-  if (userGoal && Number.parseInt(userGoal.goal, 10) <= count) {
+  if (goalMetMod > 1) {
     message = `🎉 ${user.displayName} hat am ${germanDateFormat} das Tagesziel von ${userGoal.goal} Wörtern erreicht! Insgesamt wurden ${count} Wörter geschrieben.`;
   } else {
     message = `${user.displayName} hat am ${germanDateFormat} insgesamt ${count} Wörter geschrieben.`;
@@ -56,12 +57,19 @@ export async function count(interaction, DB) {
     ephemeral: true, // Set to true if you want only the user to see the response
   });
 
-  if (goalMet) {
+  if (goalMetMod > 1) {
     const motivationalQuote = COMPLIMENTS[Math.floor(Math.random() * COMPLIMENTS.length)].replace('{USER}', user.displayName);
     await interaction.followUp({
       content: motivationalQuote,
       ephemeral: true,
     });
+    if (goalMetMod >= 2) {
+      // wrote twice the goal
+      await interaction.followUp({
+        content: 'https://media1.tenor.com/m/a9lDoOYyZikAAAAd/good-girl-atta-girl.gif',
+        ephemeral: true,
+      });
+    }
   }
 
   console.log(
