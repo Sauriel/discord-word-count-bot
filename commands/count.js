@@ -1,3 +1,5 @@
+import { MessageAttachment } from 'discord.js';
+
 const COMPLIMENTS = [
   "Fühlst du das kleine Lächeln auf deinen Lippen? Klopf dir selbst auf die Schulter! Das hast du großartig gemacht <3",
   "Und eine glückliche Ruhe kehrt in dich ein. Das ist das Gefühl von \"Wow. Ich hab es geschafft!\"",
@@ -66,13 +68,10 @@ export async function count(interaction, DB) {
     if (goalMetMod >= 2) {
       // wrote twice the goal
       try {
-
+        const attachment = new MessageAttachment('https://media1.tenor.com/m/a9lDoOYyZikAAAAd/good-girl-atta-girl.gif')
         await interaction.followUp({
-          embeds: [{
-            image: {
-              url: 'https://media1.tenor.com/m/a9lDoOYyZikAAAAd/good-girl-atta-girl.gif'
-            }
-          }],
+          content: "Wow, du hast dein Tagesziel weit übertroffen!",
+          files: [attachment],
           ephemeral: true,
         });
       } catch (error) {
