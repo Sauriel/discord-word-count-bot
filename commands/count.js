@@ -1,4 +1,4 @@
-import { MessageAttachment } from 'discord.js';
+import { AttachmentBuilder } from 'discord.js';
 
 const COMPLIMENTS = [
   "Fühlst du das kleine Lächeln auf deinen Lippen? Klopf dir selbst auf die Schulter! Das hast du großartig gemacht <3",
@@ -68,7 +68,7 @@ export async function count(interaction, DB) {
     if (goalMetMod >= 2) {
       // wrote twice the goal
       try {
-        const attachment = new MessageAttachment('https://media1.tenor.com/m/a9lDoOYyZikAAAAd/good-girl-atta-girl.gif')
+        const attachment = new AttachmentBuilder('https://media1.tenor.com/m/a9lDoOYyZikAAAAd/good-girl-atta-girl.gif')
         await interaction.followUp({
           content: "Wow, du hast dein Tagesziel weit übertroffen!",
           files: [attachment],
