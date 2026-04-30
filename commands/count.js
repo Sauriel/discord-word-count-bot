@@ -65,10 +65,19 @@ export async function count(interaction, DB) {
     });
     if (goalMetMod >= 2) {
       // wrote twice the goal
-      await interaction.followUp({
-        content: 'https://media1.tenor.com/m/a9lDoOYyZikAAAAd/good-girl-atta-girl.gif',
-        ephemeral: true,
-      });
+      try {
+
+        await interaction.followUp({
+          embeds: [{
+            image: {
+              url: 'https://media1.tenor.com/m/a9lDoOYyZikAAAAd/good-girl-atta-girl.gif'
+            }
+          }],
+          ephemeral: true,
+        });
+      } catch (error) {
+        console.error('Failed to send congratulatory image:', error);
+      }
     }
   }
 
@@ -166,6 +175,37 @@ export async function getDailyMessage(DB) {
   return `Gestern (${germanDateFormat}) wurden insgesamt ${totalWords.total} Wörter geschrieben.`;
 }
 
+/**
+ * @param {import('sqlite').Database} DB
+ * @returns {Promise<string>}
+ */
+export async function getWeeklyMessage(DB) {
+  // Calculate last 7 days (ending yesterday to avoid counting incomplete data for today)
+  const endDate = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString().slice(0, 10); // 12 hours ago (yesterday)
+  const startDateObj = new Date(endDate);
+  startDateObj.setDate(startDateObj.getDate() - 6); // 6 days before yesterday = 7 days total
+  const startDate = startDateObj.toISOString().slice(0, 10);
+  
+  const totalWords = await DB.get(
+    'SELECT SUM(count) as total FROM word_counts WHERE date >= ? AND date <= ?',
+    [startDate, endDate]
+  );
+  
+  const germanStartDate = new Intl.DateTimeFormat('de-DE', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(startDate));
+  
+  const germanEndDate = new Intl.DateTimeFormat('de-DE', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(endDate));
+  
+  return `📊 **Wöchentliche Zusammenfassung**\nIn den letzten 7 Tagen (${germanStartDate} - ${germanEndDate}) wurden insgesamt **${totalWords.total || 0}** Wörter geschrieben!`;
+}
+
 const BRAG_SHAME_QUOTES = [
   '"Der Unterschied zwischen Angeberei und Ehrgeiz ist sehr gering." - *Shawn Corey Carter*',
   '"Prahlen sollst du erst auf dem Heimweg." - *Astrid Lindgren*',
@@ -208,6 +248,109 @@ export async function brag(interaction, DB) {
 
   await interaction.followUp({
     content: BRAG_SHAME_QUOTES[Math.floor(Math.random() * BRAG_SHAME_QUOTES.length)],
+    ephemeral: true,
+  });
+}
+
+/**
+ * Get the start date for the week based on type
+ * @param {string} type - 'last7days' or 'thisweek'
+ * @returns {string} ISO date string
+ */
+function getWeekStartDate(type) {
+  const now = new Date();
+  
+  if (type === 'thisweek') {
+    // Get last Monday at 00:00
+    const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // If Sunday, go back 6 days
+    const lastMonday = new Date(now);
+    lastMonday.setDate(now.getDate() - daysToSubtract);
+    lastMonday.setHours(0, 0, 0, 0);
+    return lastMonday.toISOString().slice(0, 10);
+  } else {
+    // Last 7 days (including today)
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(now.getDate() - 6);
+    return sevenDaysAgo.toISOString().slice(0, 10);
+  }
+}
+
+/**
+ * @param {import('discord.js').ChatInputCommandInteraction<import('discord.js').CacheType>} interaction
+ * @param {import('sqlite').Database} DB
+ */
+export async function getWeekStats(interaction, DB) {
+  const type = interaction.options.getString('type') ?? 'last7days';
+  
+  const startDate = getWeekStartDate(type);
+  const today = new Date().toISOString().slice(0, 10);
+  
+  const totalWords = await DB.get(
+    'SELECT SUM(count) as total FROM word_counts WHERE date >= ? AND date <= ?',
+    [startDate, today]
+  );
+  
+  const germanStartDate = new Intl.DateTimeFormat('de-DE', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(startDate));
+  
+  const germanEndDate = new Intl.DateTimeFormat('de-DE', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(today));
+  
+  const periodText = type === 'thisweek' 
+    ? `seit Montag (${germanStartDate})`
+    : `in den letzten 7 Tagen (${germanStartDate} - ${germanEndDate})`;
+  
+  const message = `📊 Insgesamt wurden ${periodText} **${totalWords.total || 0}** Wörter geschrieben.`;
+  
+  await interaction.reply({
+    content: message,
+    ephemeral: false,
+  });
+}
+
+/**
+ * @param {import('discord.js').ChatInputCommandInteraction<import('discord.js').CacheType>} interaction
+ * @param {import('sqlite').Database} DB
+ */
+export async function getMyWeekStats(interaction, DB) {
+  const type = interaction.options.getString('type') ?? 'last7days';
+  const user = interaction.user;
+  
+  const startDate = getWeekStartDate(type);
+  const today = new Date().toISOString().slice(0, 10);
+  
+  const userWords = await DB.get(
+    'SELECT SUM(count) as total FROM word_counts WHERE user_id = ? AND date >= ? AND date <= ?',
+    [user.id, startDate, today]
+  );
+  
+  const germanStartDate = new Intl.DateTimeFormat('de-DE', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(startDate));
+  
+  const germanEndDate = new Intl.DateTimeFormat('de-DE', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(today));
+  
+  const periodText = type === 'thisweek' 
+    ? `seit Montag (${germanStartDate})`
+    : `in den letzten 7 Tagen (${germanStartDate} - ${germanEndDate})`;
+  
+  const message = `📊 **${user.displayName}**, du hast ${periodText} **${userWords.total || 0}** Wörter geschrieben.`;
+  
+  await interaction.reply({
+    content: message,
     ephemeral: true,
   });
 }

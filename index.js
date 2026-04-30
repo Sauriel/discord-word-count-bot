@@ -7,7 +7,7 @@ import {
  } from 'discord.js';
 import dotenv from 'dotenv';
 import cron from 'node-cron';
-import { count, setGoal, getStats, getDailyMessage, brag } from './commands/count.js';
+import { count, setGoal, getStats, getDailyMessage, getWeeklyMessage, brag, getWeekStats, getMyWeekStats } from './commands/count.js';
 import { getDB } from './commands/db.js';
 
 dotenv.config();
@@ -70,6 +70,32 @@ const commands = [
         )
         .setRequired(false),
     ),
+  new SlashCommandBuilder()
+    .setName('wweek')
+    .setDescription('Zeige Statistiken über die in der Woche geschriebenen Wörter an (Gesamtstatistik)')
+    .addStringOption((option) =>
+      option
+        .setName('type')
+        .setDescription('Welcher Zeitraum soll angezeigt werden?')
+        .addChoices(
+          { name: 'Letzte 7 Tage', value: 'last7days' },
+          { name: 'Seit letztem Montag', value: 'thisweek' },
+        )
+        .setRequired(false),
+    ),
+  new SlashCommandBuilder()
+    .setName('wmyweek')
+    .setDescription('Zeige deine persönlichen Statistiken über die in der Woche geschriebenen Wörter an')
+    .addStringOption((option) =>
+      option
+        .setName('type')
+        .setDescription('Welcher Zeitraum soll angezeigt werden?')
+        .addChoices(
+          { name: 'Letzte 7 Tage', value: 'last7days' },
+          { name: 'Seit letztem Montag', value: 'thisweek' },
+        )
+        .setRequired(false),
+    ),
 ];
 
 // Register slash commands
@@ -106,6 +132,22 @@ async function sendDailyMessage() {
   }
 }
 
+async function sendWeeklyMessage() {
+  const message = await getWeeklyMessage(DB);
+
+  for (const channelId of ALLOWED_CHANNELS) {
+    try {
+      const channel = await client.channels.fetch(channelId.trim());
+      if (channel && channel.isTextBased()) {
+        await channel.send(message);
+        console.log(`Weekly message sent to channel: ${channelId}`);
+      }
+    } catch (error) {
+      console.error(`Failed to send message to channel ${channelId}:`, error);
+    }
+  }
+}
+
 // When the client is ready, run this code
 client.once('ready', async () => {
   console.log(`Ready! Logged in as ${client.user.tag}`);
@@ -115,6 +157,8 @@ client.once('ready', async () => {
                       '**/w [ZAHL]** - Anzahl der geschriebenen Wörter an diesem Tag (Wird addiert oder bei negativen Zahlen abgezogen)\n' +
                       '**/wgoal [ZAHL]** - Setze ein Tagesziel für die Anzahl der geschriebenen Wörter (Gilt für alle Tage)\n' +
                       '**/wstat** - Zeige Statistiken über die geschriebenen Wörter an\n' +
+                      '**/wweek** - Zeige Wochenstatistiken an (Gesamtstatistik für letzte 7 Tage oder seit Montag)\n' +
+                      '**/wmyweek** - Zeige deine persönlichen Wochenstatistiken an\n' +
                       '**/wb** - Gebe mit deinen geschriebenen Wörtern an';
 
   for (const channelId of ALLOWED_CHANNELS) {
@@ -138,6 +182,16 @@ client.once('ready', async () => {
   });
 
   console.log('Daily message scheduler activated for 00:30');
+
+  // Schedule weekly message every Monday at 00:30
+  cron.schedule('30 0 * * 1', () => {
+    console.log('Sending weekly message...');
+    sendWeeklyMessage();
+  }, {
+    timezone: "Europe/Berlin"
+  });
+
+  console.log('Weekly message scheduler activated for Monday 00:30');
 });
 
 // Listen for slash command interactions
@@ -154,6 +208,10 @@ client.on('interactionCreate', async (interaction) => {
     await getStats(interaction, DB);
   } else if (commandName === 'wb') {
     await brag(interaction, DB);
+  } else if (commandName === 'wweek') {
+    await getWeekStats(interaction, DB);
+  } else if (commandName === 'wmyweek') {
+    await getMyWeekStats(interaction, DB);
   }
 });
 
