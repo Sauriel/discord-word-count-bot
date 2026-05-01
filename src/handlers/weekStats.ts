@@ -2,7 +2,7 @@ import { AttachmentBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { Database } from 'sqlite';
 import { getTotalWordsForPeriod, getUserWordsForPeriod } from '../database/queries.js';
 import { getWeekStartDate, getTodayDateString, formatGermanDate } from '../utils/dateFormatter.js';
-import { createWeeklyChart, createTotalWeeklyChart } from '../utils/chartGenerator.js';
+import { createWeeklyChart, createTotalWeeklyChart, createStackedWeeklyChart, createStackedTotalWeeklyChart } from '../utils/chartGenerator.js';
 
 /**
  * Verarbeitet den /wweek Command - zeigt Wochenstatistiken für alle Benutzer an
@@ -16,9 +16,12 @@ export async function handleWeekStatsCommand(interaction: ChatInputCommandIntera
   const startDate = getWeekStartDate(type);
   const today = getTodayDateString();
   
-  // Erstelle das Diagramm (kann länger als 3 Sekunden dauern)
+  // Erstelle beide Diagramme (kann länger als 3 Sekunden dauern)
   const chartBuffer = await createTotalWeeklyChart(DB, startDate, today);
+  const stackedChartBuffer = await createStackedTotalWeeklyChart(DB, startDate, today);
+  
   const attachment = new AttachmentBuilder(chartBuffer, { name: 'weekly-stats.png' });
+  const stackedAttachment = new AttachmentBuilder(stackedChartBuffer, { name: 'weekly-stats-stacked.png' });
   
   const totalWords = await getTotalWordsForPeriod(DB, startDate, today);
   
@@ -33,7 +36,7 @@ export async function handleWeekStatsCommand(interaction: ChatInputCommandIntera
   
   await interaction.editReply({
     content: message,
-    files: [attachment],
+    files: [attachment, stackedAttachment],
   });
 }
 
@@ -50,9 +53,12 @@ export async function handleMyWeekStatsCommand(interaction: ChatInputCommandInte
   const startDate = getWeekStartDate(type);
   const today = getTodayDateString();
   
-  // Erstelle das Diagramm (kann länger als 3 Sekunden dauern)
+  // Erstelle beide Diagramme (kann länger als 3 Sekunden dauern)
   const chartBuffer = await createWeeklyChart(DB, user.id, startDate, today);
+  const stackedChartBuffer = await createStackedWeeklyChart(DB, user.id, startDate, today);
+  
   const attachment = new AttachmentBuilder(chartBuffer, { name: 'weekly-stats.png' });
+  const stackedAttachment = new AttachmentBuilder(stackedChartBuffer, { name: 'weekly-stats-stacked.png' });
   
   const userWords = await getUserWordsForPeriod(DB, user.id, startDate, today);
   
@@ -67,6 +73,6 @@ export async function handleMyWeekStatsCommand(interaction: ChatInputCommandInte
   
   await interaction.editReply({
     content: message,
-    files: [attachment],
+    files: [attachment, stackedAttachment],
   });
 }
