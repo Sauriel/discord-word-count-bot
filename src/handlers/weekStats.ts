@@ -2,7 +2,7 @@ import { AttachmentBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { Database } from 'sqlite';
 import { getTotalWordsForPeriod, getUserWordsForPeriod } from '../database/queries.js';
 import { getWeekStartDate, getTodayDateString, formatGermanDate } from '../utils/dateFormatter.js';
-import { createWeeklyChart } from '../utils/chartGenerator.js';
+import { createWeeklyChart, createTotalWeeklyChart } from '../utils/chartGenerator.js';
 
 /**
  * Verarbeitet den /wweek Command - zeigt Wochenstatistiken für alle Benutzer an
@@ -10,8 +10,15 @@ import { createWeeklyChart } from '../utils/chartGenerator.js';
 export async function handleWeekStatsCommand(interaction: ChatInputCommandInteraction, DB: Database): Promise<void> {
   const type = interaction.options.getString('type') ?? 'last7days';
   
+  // Sofort acknowledgen, damit Discord nicht timeout wird
+  await interaction.deferReply({ ephemeral: false });
+  
   const startDate = getWeekStartDate(type);
   const today = getTodayDateString();
+  
+  // Erstelle das Diagramm (kann länger als 3 Sekunden dauern)
+  const chartBuffer = await createTotalWeeklyChart(DB, startDate, today);
+  const attachment = new AttachmentBuilder(chartBuffer, { name: 'weekly-stats.png' });
   
   const totalWords = await getTotalWordsForPeriod(DB, startDate, today);
   
@@ -24,9 +31,9 @@ export async function handleWeekStatsCommand(interaction: ChatInputCommandIntera
   
   const message = `📊 Insgesamt wurden ${periodText} **${totalWords}** Wörter geschrieben.`;
   
-  await interaction.reply({
+  await interaction.editReply({
     content: message,
-    ephemeral: false,
+    files: [attachment],
   });
 }
 
