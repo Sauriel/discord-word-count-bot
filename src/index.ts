@@ -1,224 +1,83 @@
-import {
-  Client,
-  GatewayIntentBits,
-  SlashCommandBuilder,
-  REST,
-  Routes,
-} from 'discord.js';
-import dotenv from 'dotenv';
-import cron from 'node-cron';
-import { count, setGoal, getStats, getDailyMessage, getWeeklyMessage, brag, getWeekStats, getMyWeekStats } from './commands/count.js';
-import { getDB } from './commands/db.js';
+import { Client, GatewayIntentBits } from 'discord.js';
+import { validateEnvironment } from './config/environment.js';
+import { COMMAND_DESCRIPTIONS } from './config/constants.js';
+import { getDB } from './database/db.js';
+import { registerCommands } from './services/commandRegistry.js';
+import { setupSchedulers } from './services/scheduler.js';
+import { sendMessageToChannels } from './services/messageHandler.js';
+import { handleCountCommand } from './handlers/count.js';
+import { handleGoalCommand } from './handlers/goal.js';
+import { handleStatsCommand } from './handlers/stats.js';
+import { handleBragCommand } from './handlers/brag.js';
+import { handleWeekStatsCommand, handleMyWeekStatsCommand } from './handlers/weekStats.js';
 
-dotenv.config();
+// Validiere Umgebungsvariablen und initialisiere Config
+const config = validateEnvironment();
 
+// Initialisiere Datenbank
 const DB = await getDB();
 
-const ALLOWED_CHANNELS: string[] = process.env.DISCORD_CHANNEL_IDS?.split(',') ?? [];
-
+// Erstelle Discord Client
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
 });
 
-const commands = [
-  new SlashCommandBuilder()
-    .setName('w')
-    .setDescription('Anzahl der geschriebenen Wörter (negative Zahlen werden vom bislang geschriebenen abgezogen)')
-    .addIntegerOption((option) =>
-      option
-        .setName('anzahl')
-        .setDescription('Die Anzahl der Wörter')
-        .setRequired(true),
-    ),
-  new SlashCommandBuilder()
-    .setName('wgoal')
-    .setDescription('Setze ein Tagesziel für die Anzahl der geschriebenen Wörter')
-    .addIntegerOption((option) =>
-      option
-        .setName('anzahl')
-        .setDescription('Das Ziel für die Anzahl der Wörter')
-        .setRequired(true),
-    ),
-  new SlashCommandBuilder()
-    .setName('wstat')
-    .setDescription('Zeige Statistiken über die geschriebenen Wörter an')
-    .addStringOption((option) =>
-      option
-        .setName('type')
-        .setDescription('Soll die Statistik detailliert angezeigt werden?')
-        .addChoices(
-          { name: 'Detailliert (User)', value: 'detailed' },
-          { name: 'Detailliert (Gruppe)', value: 'summary' },
-        )
-        .setRequired(false),
-    ),
-  new SlashCommandBuilder()
-    .setName('wb')
-    .setDescription('Gebe mit deinen geschriebenen Wörtern an.')
-    .addStringOption((option) =>
-      option
-        .setName('type')
-        .setDescription('Wie willst du angeben?')
-        .addChoices(
-          { name: 'Heute geschrieben', value: 'today' },
-          { name: 'Insgesamt geschrieben', value: 'total' },
-        )
-        .setRequired(false),
-    ),
-  new SlashCommandBuilder()
-    .setName('wweek')
-    .setDescription('Zeige Statistiken über die in der Woche geschriebenen Wörter an (Gesamtstatistik)')
-    .addStringOption((option) =>
-      option
-        .setName('type')
-        .setDescription('Welcher Zeitraum soll angezeigt werden?')
-        .addChoices(
-          { name: 'Letzte 7 Tage', value: 'last7days' },
-          { name: 'Seit letztem Montag', value: 'thisweek' },
-        )
-        .setRequired(false),
-    ),
-  new SlashCommandBuilder()
-    .setName('wmyweek')
-    .setDescription('Zeige deine persönlichen Statistiken über die in der Woche geschriebenen Wörter an')
-    .addStringOption((option) =>
-      option
-        .setName('type')
-        .setDescription('Welcher Zeitraum soll angezeigt werden?')
-        .addChoices(
-          { name: 'Letzte 7 Tage', value: 'last7days' },
-          { name: 'Seit letztem Montag', value: 'thisweek' },
-        )
-        .setRequired(false),
-    ),
-];
-
-async function registerCommands(): Promise<void> {
-  try {
-    if (!process.env.DISCORD_TOKEN || !process.env.DISCORD_APP_ID) {
-      throw new Error('DISCORD_TOKEN or DISCORD_APP_ID not set');
-    }
-
-    const rest = new REST().setToken(process.env.DISCORD_TOKEN);
-
-    console.log('Started refreshing application (/) commands.');
-
-    await rest.put(Routes.applicationCommands(process.env.DISCORD_APP_ID), {
-      body: commands.map((command) => command.toJSON()),
-    });
-
-    console.log('Successfully reloaded application (/) commands.');
-  }
-  catch (error) {
-    console.error('Error registering commands:', error);
-  }
-}
-
-async function sendDailyMessage(): Promise<void> {
-  const message = await getDailyMessage(DB);
-
-  for (const channelId of ALLOWED_CHANNELS) {
-    try {
-      const channel = await client.channels.fetch(channelId.trim());
-      if (channel?.isTextBased() && 'send' in channel) {
-        await channel.send(message);
-        console.log(`Daily message sent to channel: ${channelId}`);
-      }
-    } catch (error) {
-      console.error(`Failed to send message to channel ${channelId}:`, error);
-    }
-  }
-}
-
-async function sendWeeklyMessage(): Promise<void> {
-  const message = await getWeeklyMessage(DB);
-
-  for (const channelId of ALLOWED_CHANNELS) {
-    try {
-      const channel = await client.channels.fetch(channelId.trim());
-      if (channel?.isTextBased() && 'send' in channel) {
-        await channel.send(message);
-        console.log(`Weekly message sent to channel: ${channelId}`);
-      }
-    } catch (error) {
-      console.error(`Failed to send message to channel ${channelId}:`, error);
-    }
-  }
-}
-
+// Bot ist bereit
 client.once('ready', async () => {
   console.log(`Ready! Logged in as ${client.user?.tag}`);
-  await registerCommands();
+  
+  // Registriere Commands bei Discord
+  await registerCommands(config.discordToken, config.discordAppId);
 
-  const commandList = 'Der WordCountBot ist online. Folgende Befehle können verwendet werden:\n' +
-                      '**/w [ZAHL]** - Anzahl der geschriebenen Wörter an diesem Tag (Wird addiert oder bei negativen Zahlen abgezogen)\n' +
-                      '**/wgoal [ZAHL]** - Setze ein Tagesziel für die Anzahl der geschriebenen Wörter (Gilt für alle Tage)\n' +
-                      '**/wstat** - Zeige Statistiken über die geschriebenen Wörter an\n' +
-                      '**/wweek** - Zeige Wochenstatistiken an (Gesamtstatistik für letzte 7 Tage oder seit Montag)\n' +
-                      '**/wmyweek** - Zeige deine persönlichen Wochenstatistiken an\n' +
-                      '**/wb** - Gebe mit deinen geschriebenen Wörtern an';
+  // Sende Commandliste an alle konfigurierten Kanäle
+  await sendMessageToChannels(client, config.allowedChannels, COMMAND_DESCRIPTIONS.commandList);
 
-  for (const channelId of ALLOWED_CHANNELS) {
-    try {
-      const channel = await client.channels.fetch(channelId.trim());
-      if (channel?.isTextBased() && 'send' in channel) {
-        await channel.send(commandList);
-        console.log(`Command list sent to channel: ${channelId}`);
-      }
-    } catch (error) {
-      console.error(`Failed to send message to channel ${channelId}:`, error);
-    }
-  }
-
-  cron.schedule('30 0 * * *', () => {
-    console.log('Sending daily message...');
-    sendDailyMessage();
-  }, {
-    timezone: "Europe/Berlin",
-  });
-
-  console.log('Daily message scheduler activated for 00:30');
-
-  cron.schedule('30 0 * * 1', () => {
-    console.log('Sending weekly message...');
-    sendWeeklyMessage();
-  }, {
-    timezone: "Europe/Berlin",
-  });
-
-  console.log('Weekly message scheduler activated for Monday 00:30');
+  // Richte Cron-Jobs für tägliche und wöchentliche Nachrichten ein
+  setupSchedulers(client, config.allowedChannels, DB);
 });
 
+// Command Handler
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
   const { commandName } = interaction;
 
-  if (commandName === 'w') {
-    await count(interaction, DB);
-  } else if (commandName === 'wgoal') {
-    await setGoal(interaction, DB);
-  } else if (commandName === 'wstat') {
-    await getStats(interaction, DB);
-  } else if (commandName === 'wb') {
-    await brag(interaction, DB);
-  } else if (commandName === 'wweek') {
-    await getWeekStats(interaction, DB);
-  } else if (commandName === 'wmyweek') {
-    await getMyWeekStats(interaction, DB);
+  try {
+    switch (commandName) {
+      case 'w':
+        await handleCountCommand(interaction, DB);
+        break;
+      case 'wgoal':
+        await handleGoalCommand(interaction, DB);
+        break;
+      case 'wstat':
+        await handleStatsCommand(interaction, DB);
+        break;
+      case 'wb':
+        await handleBragCommand(interaction, DB);
+        break;
+      case 'wweek':
+        await handleWeekStatsCommand(interaction, DB);
+        break;
+      case 'wmyweek':
+        await handleMyWeekStatsCommand(interaction, DB);
+        break;
+      default:
+        console.warn(`Unknown command: ${commandName}`);
+    }
+  } catch (error) {
+    console.error(`Error handling command ${commandName}:`, error);
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({
+        content: 'Es ist ein Fehler aufgetreten. Bitte versuche es später erneut.',
+        flags: ['Ephemeral'],
+      });
+    }
   }
 });
 
+// Error Handler
 client.on('error', console.error);
 
-if (!process.env.DISCORD_TOKEN) {
-  console.error('Please set DISCORD_TOKEN in your .env file');
-  process.exit(1);
-}
-
-if (!process.env.DISCORD_APP_ID) {
-  console.error('Please set DISCORD_APP_ID in your .env file');
-  process.exit(1);
-}
-
-client.login(process.env.DISCORD_TOKEN);
+// Login
+client.login(config.discordToken);

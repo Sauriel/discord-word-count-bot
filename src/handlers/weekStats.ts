@@ -1,0 +1,65 @@
+import { AttachmentBuilder, ChatInputCommandInteraction } from 'discord.js';
+import { Database } from 'sqlite';
+import { getTotalWordsForPeriod, getUserWordsForPeriod } from '../database/queries.js';
+import { getWeekStartDate, getTodayDateString, formatGermanDate } from '../utils/dateFormatter.js';
+import { createWeeklyChart } from '../utils/chartGenerator.js';
+
+/**
+ * Verarbeitet den /wweek Command - zeigt Wochenstatistiken für alle Benutzer an
+ */
+export async function handleWeekStatsCommand(interaction: ChatInputCommandInteraction, DB: Database): Promise<void> {
+  const type = interaction.options.getString('type') ?? 'last7days';
+  
+  const startDate = getWeekStartDate(type);
+  const today = getTodayDateString();
+  
+  const totalWords = await getTotalWordsForPeriod(DB, startDate, today);
+  
+  const germanStartDate = formatGermanDate(new Date(startDate));
+  const germanEndDate = formatGermanDate(new Date(today));
+  
+  const periodText = type === 'thisweek' 
+    ? `seit Montag (${germanStartDate})`
+    : `in den letzten 7 Tagen (${germanStartDate} - ${germanEndDate})`;
+  
+  const message = `📊 Insgesamt wurden ${periodText} **${totalWords}** Wörter geschrieben.`;
+  
+  await interaction.reply({
+    content: message,
+    ephemeral: false,
+  });
+}
+
+/**
+ * Verarbeitet den /wmyweek Command - zeigt persönliche Wochenstatistiken mit Diagramm an
+ */
+export async function handleMyWeekStatsCommand(interaction: ChatInputCommandInteraction, DB: Database): Promise<void> {
+  const type = interaction.options.getString('type') ?? 'last7days';
+  const user = interaction.user;
+  
+  // Sofort acknowledgen, damit Discord nicht timeout wird
+  await interaction.deferReply({ ephemeral: true });
+  
+  const startDate = getWeekStartDate(type);
+  const today = getTodayDateString();
+  
+  // Erstelle das Diagramm (kann länger als 3 Sekunden dauern)
+  const chartBuffer = await createWeeklyChart(DB, user.id, startDate, today);
+  const attachment = new AttachmentBuilder(chartBuffer, { name: 'weekly-stats.png' });
+  
+  const userWords = await getUserWordsForPeriod(DB, user.id, startDate, today);
+  
+  const germanStartDate = formatGermanDate(new Date(startDate));
+  const germanEndDate = formatGermanDate(new Date(today));
+  
+  const periodText = type === 'thisweek' 
+    ? `seit Montag (${germanStartDate})`
+    : `in den letzten 7 Tagen (${germanStartDate} - ${germanEndDate})`;
+  
+  const message = `📊 **${user.displayName}**, du hast ${periodText} **${userWords}** Wörter geschrieben.`;
+  
+  await interaction.editReply({
+    content: message,
+    files: [attachment],
+  });
+}
