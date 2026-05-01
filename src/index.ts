@@ -4,7 +4,7 @@ import {
   SlashCommandBuilder,
   REST,
   Routes,
- } from 'discord.js';
+} from 'discord.js';
 import dotenv from 'dotenv';
 import cron from 'node-cron';
 import { count, setGoal, getStats, getDailyMessage, getWeeklyMessage, brag, getWeekStats, getMyWeekStats } from './commands/count.js';
@@ -14,17 +14,12 @@ dotenv.config();
 
 const DB = await getDB();
 
-/**
- * @type {Array<string>}
- */
-const ALLOWED_CHANNELS = process.env.DISCORD_CHANNEL_IDS.split(',');
+const ALLOWED_CHANNELS: string[] = process.env.DISCORD_CHANNEL_IDS?.split(',') ?? [];
 
-// Create a new client instance
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
 });
 
-// Define the slash command
 const commands = [
   new SlashCommandBuilder()
     .setName('w')
@@ -98,9 +93,12 @@ const commands = [
     ),
 ];
 
-// Register slash commands
-async function registerCommands() {
+async function registerCommands(): Promise<void> {
   try {
+    if (!process.env.DISCORD_TOKEN || !process.env.DISCORD_APP_ID) {
+      throw new Error('DISCORD_TOKEN or DISCORD_APP_ID not set');
+    }
+
     const rest = new REST().setToken(process.env.DISCORD_TOKEN);
 
     console.log('Started refreshing application (/) commands.');
@@ -116,13 +114,13 @@ async function registerCommands() {
   }
 }
 
-async function sendDailyMessage() {
+async function sendDailyMessage(): Promise<void> {
   const message = await getDailyMessage(DB);
 
   for (const channelId of ALLOWED_CHANNELS) {
     try {
       const channel = await client.channels.fetch(channelId.trim());
-      if (channel && channel.isTextBased()) {
+      if (channel?.isTextBased() && 'send' in channel) {
         await channel.send(message);
         console.log(`Daily message sent to channel: ${channelId}`);
       }
@@ -132,13 +130,13 @@ async function sendDailyMessage() {
   }
 }
 
-async function sendWeeklyMessage() {
+async function sendWeeklyMessage(): Promise<void> {
   const message = await getWeeklyMessage(DB);
 
   for (const channelId of ALLOWED_CHANNELS) {
     try {
       const channel = await client.channels.fetch(channelId.trim());
-      if (channel && channel.isTextBased()) {
+      if (channel?.isTextBased() && 'send' in channel) {
         await channel.send(message);
         console.log(`Weekly message sent to channel: ${channelId}`);
       }
@@ -148,9 +146,8 @@ async function sendWeeklyMessage() {
   }
 }
 
-// When the client is ready, run this code
 client.once('ready', async () => {
-  console.log(`Ready! Logged in as ${client.user.tag}`);
+  console.log(`Ready! Logged in as ${client.user?.tag}`);
   await registerCommands();
 
   const commandList = 'Der WordCountBot ist online. Folgende Befehle können verwendet werden:\n' +
@@ -164,7 +161,7 @@ client.once('ready', async () => {
   for (const channelId of ALLOWED_CHANNELS) {
     try {
       const channel = await client.channels.fetch(channelId.trim());
-      if (channel && channel.isTextBased()) {
+      if (channel?.isTextBased() && 'send' in channel) {
         await channel.send(commandList);
         console.log(`Command list sent to channel: ${channelId}`);
       }
@@ -173,32 +170,29 @@ client.once('ready', async () => {
     }
   }
 
-  // Schedule daily message at 00:30
   cron.schedule('30 0 * * *', () => {
     console.log('Sending daily message...');
     sendDailyMessage();
   }, {
-    timezone: "Europe/Berlin" // Adjust timezone as needed
+    timezone: "Europe/Berlin",
   });
 
   console.log('Daily message scheduler activated for 00:30');
 
-  // Schedule weekly message every Monday at 00:30
   cron.schedule('30 0 * * 1', () => {
     console.log('Sending weekly message...');
     sendWeeklyMessage();
   }, {
-    timezone: "Europe/Berlin"
+    timezone: "Europe/Berlin",
   });
 
   console.log('Weekly message scheduler activated for Monday 00:30');
 });
 
-// Listen for slash command interactions
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
-    const { commandName } = interaction;
+  const { commandName } = interaction;
 
   if (commandName === 'w') {
     await count(interaction, DB);
@@ -215,10 +209,8 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-// Error handling
 client.on('error', console.error);
 
-// Login to Discord with your client's token
 if (!process.env.DISCORD_TOKEN) {
   console.error('Please set DISCORD_TOKEN in your .env file');
   process.exit(1);
